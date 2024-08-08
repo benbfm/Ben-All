@@ -1,0 +1,16 @@
+//*multiple filters for array*//
+{
+  "type": "Query",
+  "inputs": {
+    "from": "@outputs('b2btask')?['body/value']",
+    "where": "@and(contains(item()?['kunnr'],'2002509788'), contains(item()?['matnr'],'5018482'))"
+  },
+  "runAfter": {
+    "b2btask": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "244ada98-4f1e-46d0-bdce-09fe9553173f"
+  }
+}
