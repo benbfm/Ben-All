@@ -1,0 +1,428 @@
+//*DCL B2B WO Allocation for SO*//
+//*Version:V20240730*//
+//*Designed by:lu.b@duracell.com*//
+//*Date:Jun.30,29=024*//
+var mrptype = mrp_ele.getString();
+var alcqty = 0;
+var woqty = 0;
+var wono = "";
+var sono = "";
+sono = ref_order.getString();
+var soatp = atp_date.getString();
+var soend = end_date.getString();
+var soqty = quantity.getString();
+soqty = soqty * 1;
+var kunnr = kunnr.getString();
+var fpc = matnr.getString();
+var itplt = itplt.getString();
+var itcs = itcs.getString();
+var fixsoqty = 0;
+var lastrun = 0;
+var alccap = 0;
+var wo01 = [];
+var wo02 = [];
+var alcqty = 0;
+var runs;
+var rune;
+var i;
+//*01step:Excluding existing allocation quantity*//
+var fixso = fireToDB(strConn, "Select * from B2BList Where MRP_Ele='WO' AND fix_plan IN ('C','X') AND isnull(link_doc,'a')='" + sono + "' Order by atp_date");
+if (fixso.length > 0) {
+ for (i = 0; i < fixso.length; i++) {
+  fixsoqty = fixsoqty + fixso[i][6]*1;
+ } //reduced allocatoin quantity//
+ soqty = soqty - fixsoqty;
+}
+//Alert(sono+soqty);
+if (mrptype == "SO" && soqty > 0) {
+ //*01step:ending *//
+ //*02step:check if 1st run for FPC*//
+ if (fpc == prefpc) {
+  for (i = 0; i < openwo.length; i++) {
+   //Using existing openwo for allocation//
+   //re-calculate coverage with new SO-delivery date//
+   if (openwo[i][1] <= soend && openwo[i][2] >= soatp) {
+    runs = dateAdd(str2date(soend, "yyyyMMddHHmmss"), "mi", -60 * soqty / openwo[i][10]);
+    runs = date2str(runs, "yyyyMMddHHmmss");
+    rune = soend;
+    if (openwo[i][1] >= runs) {
+     runs = openwo[i][1];
+    }
+    openwo[i][0] = trunc((dateDiff(str2date(runs, "yyyyMMddHHmmss"), str2date(rune, "yyyyMMddHHmmss"), "mi") / 60) * openwo[i][10] / itplt * 100);
+    openwo[i][0] = num2str(openwo[i][0], "000000");
+    wo01.push(openwo[i]);
+   }
+  }
+ }
+ //1st Run for FPC//;
+ else {
+  prefpc = fpc;
+  alcwo = [];
+  allwo = [];
+  openwo = [];
+  splitwo = [];
+  openwo = fireToDB(strConn, "Select * from B2BList Where matnr='" + fpc + "' AND MRP_Ele='WO' AND fix_plan!='C' Order by atp_date");
+  for (i = 0; i < openwo.length; i++) {
+   if (openwo[i][1] <= soend && openwo[i][2] >= soatp) {
+    //Calculate the output with period covering SO demand//
+    runs = dateAdd(str2date(soend, "yyyyMMddHHmmss"), "mi", -60 * soqty / openwo[i][10]);
+    runs = date2str(runs, "yyyyMMddHHmmss");
+    rune = soend;
+    if (openwo[i][1] >= runs) {
+     runs = openwo[i][1];
+    }
+    openwo[i][15] = itcs;
+    openwo[i][16] = itplt;
+    openwo[i][17] = false;
+    openwo[i][0] = trunc((dateDiff(str2date(runs, "yyyyMMddHHmmss"), str2date(rune, "yyyyMMddHHmmss"), "mi") / 60) * openwo[i][10] / itplt * 100);
+    openwo[i][0] = num2str(openwo[i][0], "000000");
+    wo01.push(openwo[i]);
+   }
+  }
+ }
+ //*02step:ending *//
+ //*03 allocation with WO interset with SO period*//
+ if (wo01.length > 0) {
+  wo01.sort(function(a, b) {
+   return b[0].value - a[0].value
+  });
+  for (i = 0; i < wo01.length; i++) {
+   var woatp = wo01[i][1];
+   var woend = wo01[i][2];
+   var woqty = wo01[i][6] //-wo01[i][10];
+   var wocustomer = wo01[i][9];
+   var prate = wo01[i][10];
+   var hplt = itplt / prate;
+   wono = wo01[i][5];
+   var ps = dateAdd(str2date(soend, "yyyyMMddHHmmss"), "mi", -60 * soqty / wo01[i][10]);
+   var d = dateDiff(str2date(woatp, "yyyyMMddHHmmss"), ps, "mi");
+   ps = date2str(ps, "yyyyMMddHHmmss");
+   var pe = str2date(soend, "yyyyMMddHHmmss");
+   var e = dateDiff(pe, str2date(woend, "yyyyMMddHHmmss"), "mi");
+   //Case01:early start,late end//
+   if (d >= 0 && e >= 0) {
+    //Calculte full pallet running hours//
+    //Split 01WO with full pallet,02 WO with full SO,03WO with later//
+    var dadj = (trunc(d / 60 * prate / itplt)) * itplt / prate * 60 //output//
+    var eadj = soqty / prate * 60;
+    alcwo[0] = []; //assign empty row;
+    alcwo[0][0] = "000018"; //for identified marks
+    alcwo[0][1] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", dadj), "yyyyMMddHHmmss");
+    alcwo[0][2] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", dadj + eadj), "yyyyMMddHHmmss");
+    alcwo[0][3] = wo01[i][3]; //03 mrp_ele
+    alcwo[0][4] = wo01[i][4]; //04 matnr
+    alcwo[0][5] = wo01[i][5]; //05 refer_doc
+    alcwo[0][6] = soqty; //06 quantity
+    alcwo[0][7] = wo01[i][7]; //07 unit
+    alcwo[0][8] = sono; //08 link_doc
+    alcwo[0][9] = kunnr; //09 customer
+    alcwo[0][10] = wo01[i][10]; //10 output rate
+    alcwo[0][11] = soqty; //11 assign quantity for WO,0 for SO
+    alcwo[0][12] = wo01[i][12]; //12 fix_plan,D=delete,N=new,C=Fixed
+    alcwo[0][13] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", dadj), "yyyyMMddHHmmss"); //13 WO start packing date/time
+    alcwo[0][14] = wo01[i][14]; //14 assigned capacity
+    alcwo[0][15] = itcs; //15 it/case
+    alcwo[0][16] = itplt; //16 it/pallet
+    alcwo[0][17] = false; //17 last row?
+    _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+    //Add new row for early period//
+    if ((trunc(d / 60 * prate / itplt)) * itplt != 0) {
+     alcwo[0] = [];
+     alcwo[0][0] = "000013";
+     alcwo[0][1] = wo01[i][1];
+     alcwo[0][2] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", dadj), "yyyyMMddHHmmss");
+     alcwo[0][3] = wo01[i][3];
+     alcwo[0][4] = wo01[i][4];
+     alcwo[0][5] = wo01[i][5];
+     alcwo[0][6] = (trunc(d / 60 * prate / itplt)) * itplt; //
+     alcwo[0][7] = wo01[i][7];
+     alcwo[0][8] = wo01[i][8];
+     alcwo[0][9] = wo01[i][9];
+     alcwo[0][10] = wo01[i][10];
+     alcwo[0][11] = wo01[i][11];
+     alcwo[0][12] = wo01[i][12];
+     alcwo[0][13] = wo01[i][13];
+     alcwo[0][14] = wo01[i][14];
+     alcwo[0][15] = itcs;
+     alcwo[0][16] = itplt;
+     alcwo[0][17] = false;
+     openwo = openwo.concat(alcwo);
+    }
+    //update open WO data//
+    wo01[i][1] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", dadj + eadj), "yyyyMMddHHmmss"); //0	atp_date
+    wo01[i][6] = woqty - (trunc(d / 60 * prate / itplt)) * itplt - soqty;
+    wo01[i][11] = 0; //woqty - (trunc(d /    60 * prate / itplt)) * itplt - soqty;
+    wo01[i][17] = false;
+    if (woqty == (trunc(d / 60 * prate / itplt)) * itplt - soqty) {
+     wo01[i][12] = "D";
+    }
+    //record alocation capacity//
+    link_doc.setValue(wono);
+    acl_qty.setValue(soqty);
+    soqty = 0;
+    break;
+   }
+   //Case02:early start,early end//
+   else if (d > 0 && e < 0) {
+    //Split 01WO with full pallet,02WO Max support SO//
+    if (woqty >= soqty) {
+     //Alert(wono + ":" + woqty);
+     var ps = dateAdd(str2date(woend, "yyyyMMddHHmmss"), "mi", -60 * soqty / wo01[i][10]);
+     alcwo[0] = []; //wo01[i];
+     alcwo[0][0] = "000028"; //wo01[i][0]
+     alcwo[0][1] = date2str(ps, "yyyyMMddHHmmss"); //0	atp_date
+     alcwo[0][2] = wo01[i][2];
+     alcwo[0][3] = wo01[i][3];
+     alcwo[0][4] = wo01[i][4];
+     alcwo[0][5] = wo01[i][5];
+     alcwo[0][6] = soqty;
+     alcwo[0][7] = wo01[i][7];
+     alcwo[0][8] = sono;
+     alcwo[0][9] = kunnr;
+     alcwo[0][10] = wo01[i][10];
+     alcwo[0][11] = soqty;
+     alcwo[0][12] = wo01[i][12];
+     alcwo[0][13] = date2str(ps, "yyyyMMddHHmmss");
+     alcwo[0][14] = wo01[i][14];
+     alcwo[0][15] = itcs;
+     alcwo[0][16] = itplt;
+     alcwo[0][17] = false;
+     _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+     //Update current row//;
+     wo01[i][2] = date2str(ps, "yyyyMMddHHmmss");
+     wo01[i][6] = woqty - soqty;
+     wo01[i][11] = woqty - soqty;
+     wo01[i][17] = false;
+     if (wo01[i][6] == 0) {
+      wo01[i][12] = "D";
+     }
+     link_doc.setValue(wono);
+     acl_qty.setValue(soqty);
+     soqty = 0;
+     break;
+    } else { //*Max fullfill order,to consider full pallete if required*//
+     //*var leftq = ceil((soqty - woqty) / itplt) * itplt*//
+     link_doc.setValue(wono);
+     alcqty = woqty;
+     acl_qty.setValue(alcqty);
+     //Alert(sono + ":" + leftq);
+     ps = dateAdd(str2date(woend, "yyyyMMddHHmmss"), "mi", -60 * alcqty / wo01[i][10]);
+     alcwo[0] = []; //wo01[i];
+     alcwo[0][0] = "000028";
+     alcwo[0][1] = wo01[i][1];
+     alcwo[0][2] = wo01[i][2];
+     alcwo[0][3] = wo01[i][3];
+     alcwo[0][4] = wo01[i][4];
+     alcwo[0][5] = wo01[i][5];
+     alcwo[0][6] = alcqty;
+     alcwo[0][7] = wo01[i][7];
+     alcwo[0][8] = sono;
+     alcwo[0][9] = kunnr;
+     alcwo[0][10] = wo01[i][10];
+     alcwo[0][11] = alcqty;
+     alcwo[0][12] = wo01[i][12];
+     alcwo[0][13] = wo01[i][1];
+     alcwo[0][14] = wo01[i][14];
+     alcwo[0][15] = itcs;
+     alcwo[0][16] = itplt;
+     alcwo[0][17] = false;
+     _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+     soqty = soqty - woqty;
+     wo01[i][6] = 0;
+     wo01[i][12] = "D"; //marked for removing//
+    }
+   }
+   //Case03 late start,late end//
+   else if (d < 0 && e > 0) {
+    //Split 01WO with full pallet to support SO,02WO leftover//		
+    var alcqty = trunc((woqty - e * prate / 60) / itplt) * itplt;
+    var eadj = alcqty / prate * 60;
+    //Alert("WO"+alcqty+"T:"+eadj);
+    if (alcqty != 0) {
+     //Alert("jj"+d+":"+e);
+     //record open capacity//
+     alcwo[0] = []; //wo01[i];
+     alcwo[0][0] = "000038" //wo01[i][0];
+     alcwo[0][1] = wo01[i][1];
+     alcwo[0][2] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", eadj), "yyyyMMddHHmmss"); //1	end_date
+     alcwo[0][3] = wo01[i][3];
+     alcwo[0][4] = wo01[i][4];
+     alcwo[0][5] = wo01[i][5];
+     alcwo[0][6] = alcqty;
+     alcwo[0][7] = wo01[i][7];
+     alcwo[0][8] = sono;
+     alcwo[0][9] = kunnr;
+     alcwo[0][10] = wo01[i][10];
+     alcwo[0][11] = alcqty;
+     alcwo[0][12] = wo01[i][12];
+     alcwo[0][13] = wo01[i][1];
+     alcwo[0][14] = wo01[i][14];
+     alcwo[0][15] = itcs;
+     alcwo[0][16] = itplt;
+     alcwo[0][17] = false;
+     _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+     //update capacity//
+     wo01[i][1] = date2str(dateAdd(str2date(woatp, "yyyyMMddHHmmss"), "mi", eadj), "yyyyMMddHHmmss");
+     wo01[i][6] = woqty - alcqty;
+     wo01[i][11] = woqty - alcqty;
+     wo01[i][17] = false;
+     link_doc.setValue(wono);
+     acl_qty.setValue(alcqty);
+     soqty = soqty - alcqty;
+    }
+   }
+   //Case04:late start,early end//
+   else if (d < 0 && e < 0) {
+    //Assign WO for SO, no left over//	
+    var leftq = ceil((soqty - woqty) / itplt) * itplt
+    link_doc.setValue(wono);
+    acl_qty.setValue(woqty);
+    var alcqty = woqty;
+    //Alert("W"+woqty);
+    ps = dateAdd(str2date(woend, "yyyyMMddHHmmss"), "mi", -60 * alcqty / wo01[i][10]);
+    alcwo[0] = []; //wo01[i];
+    alcwo[0][0] = "000048"; //wo01[i][0]
+    alcwo[0][1] = wo01[i][1]; //date2str(ps, "yyyyMMddHHmmss"); //0	atp_date
+    alcwo[0][2] = wo01[i][2];
+    alcwo[0][3] = wo01[i][3];
+    alcwo[0][4] = wo01[i][4];
+    alcwo[0][5] = wo01[i][5];
+    alcwo[0][6] = alcqty;
+    alcwo[0][7] = wo01[i][7];
+    alcwo[0][8] = sono;
+    alcwo[0][9] = kunnr;
+    alcwo[0][10] = wo01[i][10];
+    alcwo[0][11] = alcqty;
+    alcwo[0][12] = wo01[i][12];
+    alcwo[0][13] = wo01[i][1]; //date2str(ps, "yyyyMMddHHmmss");
+    alcwo[0][14] = wo01[i][14];
+    alcwo[0][15] = itcs;
+    alcwo[0][16] = itplt;
+    alcwo[0][17] = false;
+    _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+    wo01[i][6] = 0;
+    wo01[i][12] = "D";
+    soqty = soqty - alcqty;
+   }
+  }
+ }
+ //*03:End for checking interset WO*//
+ //*04:check for opepn SO quantity with earlier WO*//
+ if (soqty > 0) {
+  wo02.length = 0;
+  for (i = 0; i < openwo.length; i++) {
+   //Re-cal priority for wo02 Excluding assigned WO//
+   if (openwo[i][8] == null && openwo[i][1] < soatp && openwo[i][6] > 0) {
+    runs = dateAdd(str2date(soend, "yyyyMMddHHmmss"), "mi", -60 * soqty / openwo[i][10]);
+    runs = date2str(runs, "yyyyMMddHHmmss");
+    rune = openwo[i][2];
+    openwo[i][0] = trunc((dateDiff(str2date(rune, "yyyyMMddHHmmss"), str2date(runs, "yyyyMMddHHmmss"), "mi") / 60) * openwo[i][10] / itplt * 100);
+    openwo[i][0] = num2str(openwo[i][0], "000000");
+    //Alert(sono + ">>" + openwo[i][5] + "@W02:" + openwo[i][0]);
+    openwo[i][15] = itcs;
+    openwo[i][16] = itplt;
+    openwo[i][17] = false;
+    wo02.push(openwo[i]);
+   }
+  }
+  if (wo02.length != 0) {
+   var wos;
+   var woe;
+   var woqty;
+   wo02.sort(function(a, b) {
+    return a[0] - b[0]
+   });
+   for (i = 0; i < wo02.length; i++) {
+    //Alert(sono + ">>" + wo02[i][5] + "@W02:" + wo02[i][0]);
+    var woatp = wo02[i][1];
+    var woend = wo02[i][2];
+    var woqty = wo02[i][6] //-wo01[i][10];
+    var wocustomer = wo02[i][9];
+    var prate = wo02[i][10];
+    var hplt = itplt / prate;
+    wono = wo02[i][5];
+    woqty = wo02[i][6];
+    var ps = dateAdd(str2date(woend, "yyyyMMddHHmmss"), "mi", -60 * soqty / wo02[i][10]);
+    //Alert(woqty+"@W02:"+soqty);
+    if (woqty >= soqty) {
+     //Alert(wono + ":" + wo02[i][6]);
+     alcwo[0] = []; //wo01[i];
+     alcwo[0][0] = "000098"; //wo01[i][0]
+     alcwo[0][1] = date2str(ps, "yyyyMMddHHmmss"); //0	atp_date
+     alcwo[0][2] = wo02[i][2];
+     alcwo[0][3] = wo02[i][3];
+     alcwo[0][4] = wo02[i][4];
+     alcwo[0][5] = wo02[i][5];
+     alcwo[0][6] = soqty;
+     alcwo[0][7] = wo02[i][7];
+     alcwo[0][8] = sono;
+     alcwo[0][9] = kunnr;
+     alcwo[0][10] = wo02[i][10];
+     alcwo[0][11] = soqty;
+     alcwo[0][12] = wo02[i][12];
+     alcwo[0][13] = date2str(ps, "yyyyMMddHHmmss");
+     alcwo[0][14] = wo02[i][14];
+     alcwo[0][15] = itcs;
+     alcwo[0][16] = itplt;
+     alcwo[0][17] = false;
+     _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+     alcwo = []
+     //wo02[i][0] = 0;
+     wo02[i][2] = date2str(ps, "yyyyMMddHHmmss");
+     wo02[i][6] = woqty - soqty;
+     wo02[i][11] = woqty - soqty;
+     wo02[i][17] = false;
+     if (wo02[i][6] == 0) {
+      wo02[i][12] = "D";
+     }
+     link_doc.setValue(wono);
+     acl_qty.setValue(soqty);
+     soqty = 0;
+     break;
+    } else {
+     var leftq = ceil((soqty - woqty) / itplt) * itplt
+     link_doc.setValue(wono);
+     alcqty = woqty;
+     acl_qty.setValue(alcqty);
+     //Alert(sono + ":" + leftq);
+     ps = dateAdd(str2date(woend, "yyyyMMddHHmmss"), "mi", -60 * alcqty / wo02[i][10]);
+     alcwo[0] = []; //wo01[i];
+     alcwo[0][0] = "000099"; //wo01[i][0]
+     alcwo[0][1] = wo02[i][1]; //date2str(ps, "yyyyMMddHHmmss"); //0	atp_date
+     alcwo[0][2] = wo02[i][2];
+     alcwo[0][3] = wo02[i][3];
+     alcwo[0][4] = wo02[i][4];
+     alcwo[0][5] = wo02[i][5];
+     alcwo[0][6] = alcqty;
+     alcwo[0][7] = wo02[i][7];
+     alcwo[0][8] = sono;
+     alcwo[0][9] = kunnr;
+     alcwo[0][10] = wo02[i][10];
+     alcwo[0][11] = alcqty;
+     alcwo[0][12] = wo02[i][12];
+     alcwo[0][13] = wo02[i][1]; //date2str(ps, "yyyyMMddHHmmss");
+     alcwo[0][14] = wo02[i][14];
+     alcwo[0][15] = itcs;
+     alcwo[0][16] = itplt;
+     alcwo[0][17] = false;
+     _step_.putRow(_step_.getOutputRowMeta(), alcwo[0]);
+     soqty = soqty - woqty;
+     wo02[i][6] = 0;
+     wo02[i][12] = "D"; //marked for removing//
+     //wo02.slice([i-1]);
+    }
+   }
+  }
+ }
+ //*04:End checking with early start WO*//
+}
+//*Elment=SO*//
+//Prepare output row for update//
+if (Last.getBoolean() == true) {
+ for (i = 0; i < openwo.length; i++) {
+  newrow = openwo[i];
+  if (openwo[i][12] != "D") {
+   //_step_.putRow(_step_.getOutputRowMeta(), newrow);
+  }
+ }
+}
