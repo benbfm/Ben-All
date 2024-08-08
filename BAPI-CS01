@@ -28,8 +28,8 @@ try{
 	JCoDestination eca = JCoDestinationManager.getDestination("ECA");
 	JCoCustomDestination sap = eca.createCustomDestination();
 	UserData usData = sap.getUserLogonData();
-	usData.setUser("lu.b");
-	usData.setPassword("9n3kcG02");
+	usData.setUser("");
+	usData.setPassword("");
 	JCoContext.begin(sap);
 		try{
 			JCoFunction cs03 = sap.getRepository().getFunction("CSAP_MAT_BOM_OPEN");
