@@ -1,0 +1,165 @@
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
+import com.sap.conn.jco.JCoDestination;
+import com.sap.conn.jco.JCoDestinationManager;
+import com.sap.conn.jco.JCoException;
+import com.sap.conn.jco.JCoFunction;
+import com.sap.conn.jco.AbapException;
+import com.sap.conn.jco.JCoStructure;
+import com.sap.conn.jco.JCoTable;
+import com.sap.conn.jco.JCoContext;
+public boolean processRow(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {
+//if (first) {}
+String TaskMsg = "";
+DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+LocalDateTime ld  = LocalDateTime.now();
+String runtime = ld.format(dtf);
+Object[] r = getRow();
+if (r == null) {
+    setOutputDone();
+    return false;
+  	}
+r = createOutputRow(r, data.outputRowMeta.size());
+String MATNR = get(Fields.In, "MATNR").getString(r);
+String WERKS = get(Fields.In, "WERKS").getString(r);
+try{
+	
+	JCoDestination sap = JCoDestinationManager.getDestination("ECA");
+	//change user ID for different TCode
+	//JCoCustomDestination cust_dest = sap.createCustomDestination();
+	//UserData usData = cust_dest.getUserLogonData();
+	//usData.setUser("HUGO");
+	//usData.setPassword("HUGO");
+	//change sap to cust_dest in case different user login
+	JCoContext.begin(sap);
+	JCoFunction mm01 = sap.getRepository().getFunction("BAPI_MATERIAL_SAVEDATA");
+	JCoFunction mm02 = sap.getRepository().getFunction("BAPI_OBJCL_CHANGE");
+	JCoFunction cmt = sap.getRepository().getFunction("BAPI_TRANSACTION_COMMIT");
+	JCoStructure mm01msg = mm01.getExportParameterList().getStructure("RETURN");
+	JCoStructure HEADDATA = mm01.getImportParameterList().getStructure("HEADDATA");
+	//JCoStructure CLIENTDATA = mm01.getImportParameterList().getStructure("CLIENTDATA");
+	//JCoStructure CLIENTDATAX = mm01.getImportParameterList().getStructure("CLIENTDATAX");
+	JCoStructure PLANTDATA = mm01.getImportParameterList().getStructure("PLANTDATA");
+	JCoStructure PLANTDATAX = mm01.getImportParameterList().getStructure("PLANTDATAX");
+	JCoStructure PLANNINGDATA = mm01.getImportParameterList().getStructure("PLANNINGDATA");
+	JCoStructure PLANNINGDATAX = mm01.getImportParameterList().getStructure("PLANNINGDATAX");
+	//JCoStructure STORAGELOCATIONDATA = mm01.getImportParameterList().getStructure("STORAGELOCATIONDATA");
+	//JCoStructure STORAGELOCATIONDATAX = mm01.getImportParameterList().getStructure("STORAGELOCATIONDATAX");
+	//JCoStructure VALUATIONDATA = mm01.getImportParameterList().getStructure("VALUATIONDATA");
+	//JCoStructure VALUATIONDATAX = mm01.getImportParameterList().getStructure("VALUATIONDATAX");
+	//JCoTable MATERIALDESCRIPTION = mm01.getTableParameterList().getTable("MATERIALDESCRIPTION");
+	//JCoTable TAXCLASSIFICATIONS = mm01.getTableParameterList().getTable("TAXCLASSIFICATIONS");
+	//JcoTable.clear(); to empty exisitng row in JcoTable
+	//MATERIALDESCRIPTION.clear();
+	//TAXCLASSIFICATIONS.clear();
+	try{
+		HEADDATA.setValue("MATERIAL",MATNR);
+		//Select view for create or update
+		//HEADDATA.setValue("PURCHASE_VIEW","X");
+		HEADDATA.setValue("MRP_VIEW","X");
+		//HEADDATA.setValue("STORAGE_VIEW","X");
+		//HEADDATA.setValue("ACCOUNT_VIEW","X");
+		//----------Plant Data Field for value--------
+		PLANTDATAX.setValue("PLANT",WERKS);
+		//PLANTDATAX.setValue("PUR_GROUP","X");
+		//PLANTDATAX.setValue("MRP_TYPE","X");
+		//PLANTDATAX.setValue("MRP_CTRLER","X");
+		//PLANTDATAX.setValue("PLND_DELRY","X");
+		PLANTDATAX.setValue("GR_PR_TIME","X");
+		//PLANTDATAX.setValue("LOTSIZEKEY","X");
+		//PLANTDATAX.setValue("PROC_TYPE","X");
+		//PLANTDATAX.setValue("SAFETY_STK","X");
+		//PLANTDATAX.setValue("SM_KEY","X");
+		//PLANTDATAX.setValue("REPLENTIME","X");
+		//PLANTDATAX.setValue("QUOTAUSAGE","X");
+		//PLANTDATAX.setValue("SOURCELIST","X");
+		//PLANTDATAX.setValue("PROFIT_CTR","X");
+		//PLANTDATAX.setValue("ISS_ST_LOC","X");
+		//PLANTDATAX.setValue("SLOC_EXPRC","X");
+		//PLANTDATAX.setValue("MRP_GROUP","X");
+		//PLANTDATAX.setValue("AVAILCHECK","X");
+		//PLANTDATAX.setValue("AUTO_P_ORD","X");
+		////----------Assign Value for Plant Data--------
+		PLANTDATA.setValue("PLANT",WERKS);
+		//PLANTDATA.setValue("PUR_GROUP", get(Fields.In, "PUR_GROUP").getString(r));
+		//PLANTDATA.setValue("MRP_TYPE", get(Fields.In, "MRP_TYPE").getString(r));
+		//PLANTDATA.setValue("MRP_CTRLER", get(Fields.In, "MRP_CTRLER").getString(r));
+		//PLANTDATA.setValue("PLND_DELRY",get(Fields.In, "PLND_DELRY").getString(r));//
+		PLANTDATA.setValue("GR_PR_TIME", "-1");
+		//PLANTDATA.setValue("LOTSIZEKEY", get(Fields.In, "LOTSIZEKEY").getString(r));
+		//PLANTDATA.setValue("PROC_TYPE", get(Fields.In, "PROC_TYPE").getString(r));
+		//PLANTDATA.setValue("SAFETY_STK", get(Fields.In, "SAFETY_STK").getString(r));
+		//PLANTDATA.setValue("SM_KEY", get(Fields.In, "SM_KEY").getString(r));
+		//PLANTDATA.setValue("REPLENTIME", get(Fields.In, "REPLENTIME").getString(r));
+		//PLANTDATA.setValue("QUOTAUSAGE", get(Fields.In, "QUOTAUSAGE").getString(r));
+		//if (get(Fields.In, "SOURCELIST").getString(r)!=""){
+		//		PLANTDATA.setValue("SOURCELIST","X");} else {
+		//		PLANTDATA.setValue("SOURCELIST","");}
+		//PLANTDATA.setValue("PROFIT_CTR", get(Fields.In, "PROFIT_CTR").getString(r));
+		//PLANTDATA.setValue("ISS_ST_LOC", get(Fields.In, "ISS_ST_LOC").getString(r));
+		//PLANTDATA.setValue("SLOC_EXPRC", get(Fields.In, "ISS_ST_LOC").getString(r));
+		//PLANTDATA.setValue("MRP_GROUP", get(Fields.In, "MRP_GROUP").getString(r));
+		//PLANTDATA.setValue("AVAILCHECK", "02");
+		//logError(get(Fields.In, "AUTO_P_ORD").getString(r));
+		//if(get(Fields.In, "AUTO_P_ORD").getString(r)!=""){
+		//		PLANTDATA.setValue("AUTO_P_ORD","X");} else {
+		//		PLANTDATA.setValue("AUTO_P_ORD","");}
+		//----------Storage Location---------
+		//STORAGELOCATIONDATAX.setValue("PLANT",WERKS);
+		//STORAGELOCATIONDATAX.setValue("STGE_LOC", get(Fields.In, "STGE_LOC").getString(r));
+		//STORAGELOCATIONDATAX.setValue("STGE_BIN","X");
+		//----------Assing Location---------
+		//STORAGELOCATIONDATA.setValue("PLANT",WERKS);
+		//STORAGELOCATIONDATA.setValue("STGE_LOC",get(Fields.In, "STGE_LOC").getString(r));
+		//STORAGELOCATIONDATA.setValue("STGE_BIN",get(Fields.In, "STGE_BIN").getString(r));
+		//----------Accounting Fields------------
+		//VALUATIONDATAX.setValue("VAL_AREA",WERKS);
+		//VALUATIONDATAX.setValue("PRICE_CTRL","X");
+		//VALUATIONDATAX.setValue("PRICE_UNIT","X");
+		//VALUATIONDATAX.setValue("VAL_CLASS","X");
+		//----------Accounting Value------------
+		//VALUATIONDATA.setValue("VAL_AREA", WERKS);
+		//VALUATIONDATA.setValue("PRICE_CTRL",get(Fields.In, "PRICE_CTRL").getString(r));
+		//VALUATIONDATA.setValue("PRICE_UNIT",get(Fields.In, "PRICE_UNIT").getString(r));
+		//VALUATIONDATA.setValue("VAL_CLASS",get(Fields.In, "VAL_CLASS").getString(r));
+		//----------ZH description--------------
+		//String MATL_DESC_ZH = get(Fields.In, "MATL_DESC_ZH").getString(r);
+		//if (MATL_DESC_ZH !=""){
+		//MATERIALDESCRIPTION.appendRow();
+		//MATERIALDESCRIPTION.setValue("LANGU","1");
+		//MATERIALDESCRIPTION.setValue("MATL_DESC",MATL_DESC_ZH);}
+		//----------Updated Tax Indicator-------------
+		//String TAX_IND = get(Fields.In, "TAX_IND").getString(r);
+		//if (TAX_IND.equals("1")) {
+		//	TAXCLASSIFICATIONS.appendRow();
+		//	TAXCLASSIFICATIONS.setValue("DEPCOUNTRY","CN");
+		//	TAXCLASSIFICATIONS.setValue("TAX_IND","1");}
+			//try{
+				mm01.execute(sap);
+				//}
+				//catch (AbapException ex)
+				//{
+				//logError(mm01msg.getString("MESSAGE"));
+				//get(Fields.Out, "vbs").setValue(r, "");
+				//TaskMsg="MM01NE:"+mm01msg.getString("TYPE")+">>"+mm01msg.getString("MESSAGE")+"@"+runtime;
+				//}
+   			if (mm01msg.getString("TYPE").equals("S")) {
+				//Need to assign class#/Char. value for new material
+				//logError(mm01msg.getString("MESSAGE"));				
+				TaskMsg ="MM02S:"+mm01msg.getString("TYPE")+">>"+mm01msg.getString("MESSAGE")+"@"+runtime;
+				}else{
+						TaskMsg ="MM02E:"+mm01msg.getString("TYPE")+">>"+mm01msg.getString("MESSAGE")+"@"+runtime;
+						logError(TaskMsg);
+						setLinesRejected(1);
+						}
+		}catch (JCoException ex)
+		{logError(ex.toString());}
+		finally
+		{
+		JCoContext.end(sap);
+		}
+	}catch (JCoException ex){logError(ex.toString());}
+	get(Fields.Out, "TaskInfo").setValue(r, TaskMsg);
+	putRow(data.outputRowMeta, r);
+	return true;
+}
