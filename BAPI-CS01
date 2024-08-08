@@ -1,0 +1,114 @@
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
+import com.sap.conn.jco.JCoDestination;
+import com.sap.conn.jco.JCoDestinationManager;
+import com.sap.conn.jco.JCoException;
+import com.sap.conn.jco.JCoFunction;
+import com.sap.conn.jco.AbapException;
+import com.sap.conn.jco.JCoStructure;
+import com.sap.conn.jco.JCoTable;
+import com.sap.conn.jco.JCoContext;
+import com.sap.conn.jco.JCoField;
+import com.sap.conn.jco.JCoCustomDestination;
+import com.sap.conn.jco.JCoCustomDestination.UserData;
+//import com.sap.conn.jco.UserData;
+public boolean processRow(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {
+//if (first) {}
+String TaskMsg = "";
+DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+LocalDateTime ld  = LocalDateTime.now();
+String runtime = ld.format(dtf);
+Object[] r = getRow();
+if (r == null) {
+    setOutputDone();
+    return false;
+  	}
+r = createOutputRow(r, data.outputRowMeta.size());
+try{
+	JCoDestination eca = JCoDestinationManager.getDestination("ECA");
+	JCoCustomDestination sap = eca.createCustomDestination();
+	UserData usData = sap.getUserLogonData();
+	usData.setUser("lu.b");
+	usData.setPassword("9n3kcG02");
+	JCoContext.begin(sap);
+		try{
+			JCoFunction cs03 = sap.getRepository().getFunction("CSAP_MAT_BOM_OPEN");
+			JCoFunction cs02 = sap.getRepository().getFunction("CSAP_BOM_ITEM_MAINTAIN");
+			JCoFunction cmt = sap.getRepository().getFunction("CSAP_MAT_BOM_CLOSE");
+			JCoStructure O_STKO = cs03.getExportParameterList().getStructure("O_STKO");
+			//JCoStructure cs03_WARNING = cs03.getExportParameterList().getStructure("FL_WARNING");
+			//JCoStructure I_STKO = cs03.getImportParameterList();	
+			JCoTable T_STPO = cs03.getTableParameterList().getTable("T_STPO");		
+			JCoStructure I_STPO = cs02.getImportParameterList().getStructure("I_STPO");
+			JCoStructure O_STPO = cs02.getExportParameterList().getStructure("O_STPO");
+			//JCoStructure cs02_WARNING = cs02.getExportParameterList().getStructure("FL_WARNING");
+			//JCoStructure cmt_WARNING = cmt.getExportParameterList().getStructure("FL_WARNING");
+			cs03.getImportParameterList().setValue("PLANT",get(Fields.In, "WERKS").getString(r));
+			cs03.getImportParameterList().setValue("MATERIAL", get(Fields.In, "MATNR").getString(r));
+			cs03.getImportParameterList().setValue("BOM_USAGE","1");
+			cs03.getImportParameterList().setValue("ALTERNATIVE",get(Fields.In, "ALT").getString(r));
+			cs03.getImportParameterList().setValue("FL_NO_CHANGE_DOC","X");
+			cs03.getImportParameterList().setValue("VALID_FROM",get(Fields.In, "VDATE").getString(r));
+			cs03.execute(sap);
+			//cs02.execute(sap);
+			//cmt.execute(sap);
+		if (T_STPO.isEmpty()){
+			logError("no bom");
+			}else{
+				T_STPO.firstRow();
+				//for (int i = 0; i < T_STPO.getNumRows(); i++, T_STPO.nextRow()){
+				//Copy Bom_Item for change based on input condition//&&(T_STPO.getString("COMPONENT")== get(Fields.In, "INDRK").getString(r))
+				//&&T_STPO.getString("COMPONENT").equals(get(Fields.In, "INDRK").getString(r))
+				String INDRK = get(Fields.In, "INDRK").getString(r);
+				String ITEM = get(Fields.In, "ITEM").getString(r);
+				//logError(T_STPO.getString("COMPONENT"));&&T_STPO.getString("COMPONENT").equals(INDRK)
+					//add new item
+					//I_STPO.setValue("ITEM_NO","150");
+					//I_STPO.setValue("ITEM_CATEG","L");
+					//I_STPO.setValue("COMPONENT","2002305");
+					//I_STPO.setValue("COMP_QTY","10950");
+					//I_STPO.setValue("ITM_IDENT","00000023");
+					//I_STPO.setValue("COMP_UNIT","G");
+				//*for (JCoField field : I_STPO) {					
+      			//		I_STPO.setValue(field.getName(),T_STPO.getString(field.getName()));
+						    I_STPO.setValue("ITEM_CATEG",T_STPO.getString("ITEM_CATEG"));
+                            I_STPO.setValue("ITEM_NO",T_STPO.getString("ITEM_NO"));
+                            I_STPO.setValue("COMPONENT",T_STPO.getString("COMPONENT"));
+                            I_STPO.setValue("CLASS",T_STPO.getString("CLASS"));
+                            I_STPO.setValue("CLASS_TYPE",T_STPO.getString("CLASS_TYPE"));
+                            I_STPO.setValue("DOCUMENT",T_STPO.getString("DOCUMENT"));
+                            I_STPO.setValue("DOC_TYPE",T_STPO.getString("DOC_TYPE"));
+                            I_STPO.setValue("DOC_PART",T_STPO.getString("DOC_PART"));
+                            I_STPO.setValue("DOC_VERS",T_STPO.getString("DOC_VERS"));
+                            I_STPO.setValue("SORTSTRING",T_STPO.getString("SORTSTRING"));
+                            I_STPO.setValue("ITEM_GUID",T_STPO.getString("ITEM_GUID"));
+				//	}*//	
+					//I_STPO.setValue("ITEM_NO","0010");
+					//I_STPO.setValue("ITEM_NODE","00000026");
+					//I_STPO.setValue("ITEM_COUNT","00000065");
+					//I_STPO.setValue("ITEM_CATEG","L");
+					I_STPO.setValue("COMPONENT","2002305");
+					I_STPO.setValue("COMP_QTY","10950");
+					I_STPO.setValue("COMP_UNIT","G");
+					I_STPO.setValue("COMP_SCRAP","3");
+					//I_STPO.setValue("OP_SCRAP","1");
+				//logError("00 bom");		
+				//Assign revised value to the relactive fields
+					//I_STPO.setValue(x,v);
+					cs02.execute(sap);
+					cmt.execute(sap);
+			
+					//logError("Component not found!E=1");}
+				}
+		}catch (AbapException e)
+		{logError(e.toString());}
+		finally
+		{		
+		JCoContext.end(sap);
+		}
+	}catch (JCoException e){logError(e.toString());}
+	//get(Fields.Out, "TaskInfo").setValue(r, TaskMsg);
+//Substitute Value for current row
+	putRow(data.outputRowMeta, r);
+	return true;
+}
