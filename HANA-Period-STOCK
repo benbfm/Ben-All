@@ -1,0 +1,54 @@
+Select x.*,v.MAKTG,u.MTART,u.MEINS,y.GL,y.TXT50,z.PRCTR,? as Period from (SELECT 
+MATNR
+,BWKEY
+,Concat(LFGJA,LFMON) as "YYMM"
+,LBKUM
+,SALK3
+,STPRS
+,BKLAS
+,'' as "H"
+FROM SLT_ECC_HANA.MBEW
+Where BWTAR ='' AND LBKUM !=0 AND SALK3!=0 AND concat(LFGJA,LFMON)<=? AND BWKEY IN ('8046','8511','8513') ---Report Period
+Union All
+(SELECT  
+b.MATNR
+,b.BWKEY
+,Concat(LFGJA,LFMON) as "YYMM"
+,LBKUM
+,SALK3
+,STPRS
+,BKLAS
+,'H' as "H"
+FROM SLT_ECC_HANA.MBEWH a
+--Where a.BWTAR ='' 
+right join
+(SELECT  
+MATNR
+,BWKEY
+,min(concat(LFGJA,LFMON)) as "YYMM"
+FROM SLT_ECC_HANA.MBEWH
+Where BWTAR ='' AND concat(LFGJA,LFMON)>=? AND BWKEY IN ('8046','8511','8513') ---Report Period
+Group by MATNR,BWKEY) b 
+on a.BWKEY=b.BWKEY and a.MATNR=b.MATNR and concat(LFGJA,LFMON)=b.YYMM
+where a.BWTAR ='' and  a.SALK3!=0))x
+Left Join 
+(Select MAKTG,MATNR from SLT_ECC_HANA.MAKT where SPRAS ='E')v
+on x.MATNR = v.MATNR
+Left Join 
+(Select MATNR,MTART,MEINS from SLT_ECC_HANA.MARA)u
+on x.MATNR = u.MATNR
+Left Join
+(SELECT 
+BKLAS
+,KONTH*1 as GL
+,TXT50
+FROM SLT_ECC_HANA.T030 a
+left join
+SLT_ECC_HANA.SKAT b
+on a.KONTH=b.SAKNR and a.KTOPL=b.KTOPL 
+where b.SPRAS='E' and a.KTOSL='BSX' AND a.KTOPL ='0100'
+) y
+on x.BKLAS=y.BKLAS
+left join
+(select WERKS,MATNR,PRCTR from SLT_ECC_HANA.MARC) z
+on x.MATNR = z.MATNR and x.BWKEY = z.WERKS
