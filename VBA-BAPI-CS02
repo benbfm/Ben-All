@@ -1,0 +1,247 @@
+Function CS02M()
+Dim Stime, a, b, c, d, str As String, str1 As String
+Dim I As Double, J As Integer, K As Integer, L As Integer
+Dim R As Integer, X As Integer, V As Integer, F As Integer
+Dim BOPEN As Object, BMODE As Object, BCLS As Object, TSTPO As Object
+Dim MATNR As Object, WERKS As Object, STLAN As Object, ISTPO As Object
+Dim STLAL As Object, VDATE As Object, STKO As Object, NODOC As Object
+Dim CMT As Object, MSEG As Object, BList As Object, RMSG As Object
+Dim OldStr As String, NewStr As String
+Dim rs As New ADODB.Recordset, MaxNo As String
+Stime = Timer
+Sheet4.Visible = xlSheetVeryHidden
+'Application.Calculation = xlCalculationManual
+If Sheet1.AutoFilterMode Then Sheet1.AutoFilter.ShowAllData
+If Sheet2.AutoFilterMode Then Sheet2.AutoFilter.ShowAllData
+R = Sheet2.Range("A1").End(xlDown).Row
+If R > 1 And R < 9999 ThenVBA
+CHK:
+If I < 1 And SAPOn = False Then
+    I = I + 1
+    LogOn
+    GoTo CHK
+    ElseIf SAP.Connection.IsConnected = 1 Then '
+    If MsgBox("重要提醒：" & "【系统：" & SAP.Connection.SystemID & "用户：" & SAP.Connection.User & "】" & Chr(10) & "此功能将以Excel的数据覆盖SAP现有的BOM数据" & Chr(10) & "覆盖后数据将无法恢复!!" & Chr(10) & "上传大约需要：" & Round(R * 1 / 60, 0) & "分钟", vbOKCancel + vbCritical, "确定要批量导入BOM数据吗？") = vbCancel Then
+    Exit Function
+    End If
+    Application.ScreenUpdating = False
+    Set BList = CreateObject("Scripting.Dictionary")
+    rs.Fields.Append "WERKS", adChar, 4     '00
+    rs.Fields.Append "MATNR", adInteger     '01
+    rs.Fields.Append "STLAN", adChar, 1     '02
+    rs.Fields.Append "STLAL", adChar, 2     '03
+    rs.Fields.Append "POSNR", adChar, 4     '04
+    rs.Fields.Append "POSTP", adChar, 1     '05
+    rs.Fields.Append "INDKR", adInteger     '06
+    rs.Fields.Append "KTEXT", adVariant     '07受登陆语言影响，EN下载EN描述，ZH下载中文
+    rs.Fields.Append "MENGE", adDouble      '08
+    rs.Fields.Append "MEINS", adVariant     '09
+    rs.Fields.Append "AUSCH", adDouble      '10
+    rs.Fields.Append "AVOAU", adDouble      '11
+    rs.Fields.Append "AEDAT", adVariant     '12
+    rs.Fields.Append "AENAM", adVariant     '13
+    rs.Fields.Append "UPLOAD", adVariant    '14
+    rs.Fields.Append "BINDEX", adChar, 26   '15
+    rs.Open
+    With rs
+    For K = 2 To R
+    If Len(Sheet2.Cells(K, 1)) > 0 Then
+    .AddNew
+    For L = 0 To 14
+    .Fields(L).Value = Trim$(Sheet2.Cells(K, L + 1).Value)
+    Next L
+    str = Sheet2.Cells(K, 1).Value & "/" & Sheet2.Cells(K, 2).Value & "/" & Sheet2.Cells(K, 3).Value & "/" & Sheet2.Cells(K, 4).Value
+    If BList.Exists(str) = False Then BList.Add str, 1
+    .Fields(15).Value = str
+    End If
+    .Update
+    Next K
+    End With
+            If BList.Count = 0 Then 'BOM#
+            Sheet3.Cells.ClearContents
+            Application.ScreenUpdating = True
+            MsgBox "请填先下载成品、半成品BOM信息", vbCritical, "BOM数据缺失"
+            Exit Function
+            Else
+            rs.MoveFirst
+            rs.Sort = "WERKS,MATNR,STLAN,STLAL,POSNR"
+            Set BOPEN = SAP.Add("CSAP_MAT_BOM_OPEN")
+            Set BMODE = SAP.Add("CSAP_BOM_ITEM_MAINTAIN")
+            Set BCLS = SAP.Add("CSAP_MAT_BOM_CLOSE")
+            '>>>>>>Input Value for BOM reader
+            Set MATNR = BOPEN.Exports("MATERIAL")
+            Set WERKS = BOPEN.Exports("PLANT")
+            Set STLAN = BOPEN.Exports("BOM_USAGE")
+            Set STLAL = BOPEN.Exports("ALTERNATIVE")
+            Set VDATE = BOPEN.Exports("VALID_FROM") 'Must
+            Set NODOC = BOPEN.Exports("FL_NO_CHANGE_DOC")
+            Set TSTPO = BOPEN.Tables("T_STPO")
+            VDATE = Date
+            NODOC = "X"
+            '>>>>>>>Change BOM Item
+            Set ISTPO = BMODE.Exports("I_STPO")
+            'F = 98
+            'Set RMSG = BMODE.Imports("FL_WARNING")
+            '>>>>>>>Get Message from BOM close
+            'Set CMT = BCLS.Exports("FL_COMMIT_AND_WAIT")
+            'Set MSEG = BCLS.Exceptions("ERROR")
+            a = BList.Keys
+            L = BList.Count
+            L = L - 1
+            '>>>>>>>>>Process each BOM/item
+                For I = 0 To L
+                rs.Filter = ""
+                rs.Filter = "BINDEX='" & a(I) & "'"
+                J = rs.RecordCount
+                If J > 0 Then
+                    TSTPO.FreeTable
+                    'ISTPO.FreeTable
+                    WERKS = rs.Fields(0).Value
+                    MATNR = rs.Fields(1).Value
+                    STLAN = rs.Fields(2).Value
+                    STLAL = rs.Fields(3).Value
+                    BOPEN.Call
+                    X = TSTPO.RowCount
+                    If X > 0 Then
+                    '>>>>Same Row#
+                            If J = X Then
+                            For V = 1 To X
+                            OldStr = "": NewStr = ""
+                            ISTPO.Clear
+                                OldStr = TSTPO(V, "ITEM_NO") & "|" & TSTPO(V, "COMPONENT") & "|" & Format(TSTPO(V, "COMP_QTY") * 1, "0.000") & "|" & Trim$(TSTPO(V, "COMP_UNIT")) & "|" & Format(TSTPO(V, "COMP_SCRAP"), "0.000")
+                                NewStr = Format(rs("POSNR").Value, "0000") & "|" & rs("INDKR").Value & "|" & Format(rs("MENGE").Value * 1, "0.000") & "|" & Trim$(rs("MEINS").Value) & "|" & Format(rs("AUSCH").Value, "0.000")
+                                If OldStr = NewStr Then
+                                    rs("UPLOAD").Value = "S:same data:" & Now()
+                                Else
+                                    For F = 1 To 93
+                                    ISTPO(F) = Trim$(TSTPO(V, F))
+                                    Next
+                                    ISTPO("ITEM_NO") = rs("POSNR").Value
+                                    'ISTPO("ITEM_CATEG") = rs("POSTP").Value
+                                    ISTPO("COMPONENT") = rs("INDKR").Value
+                                    ISTPO("COMP_QTY") = rs("MENGE").Value
+                                    ISTPO("COMP_UNIT") = Trim$(rs("MEINS").Value)
+                                    ISTPO("COMP_SCRAP") = rs("AUSCH").Value
+                                    'ISTPO("OP_SCRAP") = rs("AVOAU").Value
+                                    BMODE.Call
+                                    rs("UPLOAD").Value = "S:SAP Loading:" & Now()
+                                End If
+                                rs.MoveNext
+                                
+                            Next V
+                            
+                            ElseIf J < X Then 'delete addtional item#
+                                For V = 1 To X
+                                OldStr = "": NewStr = ""
+                                ISTPO.Clear
+                                'MsgBox SAP.Connection.SystemID
+                                If V > J Then
+                                For F = 1 To 93
+                                ISTPO(F) = Trim$(TSTPO(V, F))
+                                Next
+                                ISTPO("FLDELETE") = "X"
+                                BMODE.Call
+                                'BCLS.Call
+                                'MsgBox MSEG
+                                Else
+                                OldStr = TSTPO(V, "ITEM_NO") & "|" & TSTPO(V, "COMPONENT") & "|" & Format(TSTPO(V, "COMP_QTY") * 1, "0.000") & "|" & Trim$(TSTPO(V, "COMP_UNIT")) & "|" & Format(TSTPO(V, "COMP_SCRAP"), "0.000")
+                                NewStr = Format(rs("POSNR").Value, "0000") & "|" & rs("INDKR").Value & "|" & Format(rs("MENGE").Value * 1, "0.000") & "|" & Trim$(rs("MEINS").Value) & "|" & Format(rs("AUSCH").Value, "0.000")
+                                        If OldStr = NewStr Then
+                                        rs("UPLOAD").Value = "S:same data:" & Now()
+                                        Else
+                                        For F = 1 To 93
+                                        ISTPO(F) = Trim$(TSTPO(V, F))
+                                        Next
+                                        ISTPO("ITEM_NO") = rs("POSNR").Value
+                                        'ISTPO("ITEM_CATEG") = rs("POSTP").Value
+                                        ISTPO("COMPONENT") = rs("INDKR").Value
+                                        ISTPO("COMP_QTY") = rs("MENGE").Value
+                                        ISTPO("COMP_UNIT") = Trim$(rs("MEINS").Value)
+                                        ISTPO("COMP_SCRAP") = rs("AUSCH").Value
+                                        'ISTPO("OP_SCRAP") = rs("AVOAU").Value
+                                        BMODE.Call
+                                        rs("UPLOAD").Value = "S:SAP Loading:" & Now()
+                                    End If
+                                rs.MoveNext
+                                End If
+                                Application.Wait (Now + TimeValue("00:00:01"))
+                                Next V
+                            ElseIf J > X Then
+                                For V = 1 To J
+                                OldStr = "": NewStr = ""
+                                ISTPO.Clear
+                                If V > X Then
+                                MaxNo = Format(MaxNo * 1 + 10, "0000")
+                                ISTPO("ITEM_NO") = MaxNo
+                                ISTPO("ITEM_CATEG") = rs("POSTP").Value
+                                ISTPO("COMPONENT") = rs("INDKR").Value
+                                ISTPO("COMP_QTY") = rs("MENGE").Value
+                                ISTPO("COMP_UNIT") = Trim$(rs("MEINS").Value)
+                                ISTPO("COMP_SCRAP") = rs("AUSCH").Value
+                                'ISTPO("OP_SCRAP") = rs("AVOAU").Value
+                                BMODE.Call
+                                'BCLS.Call
+                                rs("UPLOAD").Value = "S:SAP Loading:" & Now()
+                                rs.MoveNext
+                                Else
+
+                                
+                                OldStr = TSTPO(V, "ITEM_NO") & "|" & TSTPO(V, "COMPONENT") & "|" & Format(TSTPO(V, "COMP_QTY") * 1, "0.000") & "|" & Trim$(TSTPO(V, "COMP_UNIT")) & "|" & Format(TSTPO(V, "COMP_SCRAP"), "0.000")
+                                NewStr = Format(rs("POSNR").Value, "0000") & "|" & rs("INDKR").Value & "|" & Format(rs("MENGE").Value * 1, "0.000") & "|" & Trim$(rs("MEINS").Value) & "|" & Format(rs("AUSCH").Value, "0.000")
+                                        If OldStr = NewStr Then
+                                        rs("UPLOAD").Value = "S:1,same data:" & Now()
+                                        Else
+                                        For F = 1 To 93
+                                        ISTPO(F) = Trim$(TSTPO(V, F))
+                                        Next
+                                        ISTPO("ITEM_NO") = rs("POSNR").Value
+                                        'ISTPO("ITEM_CATEG") = rs("POSTP").Value
+                                        ISTPO("COMPONENT") = rs("INDKR").Value
+                                        ISTPO("COMP_QTY") = rs("MENGE").Value
+                                        ISTPO("COMP_UNIT") = Trim$(rs("MEINS").Value)
+                                        ISTPO("COMP_SCRAP") = rs("AUSCH").Value
+                                        'ISTPO("OP_SCRAP") = rs("AVOAU").Value
+                                        BMODE.Call
+                                        rs("UPLOAD").Value = "S:SAP Loading:" & Now()
+                                    End If
+                                    MaxNo = rs("POSNR").Value
+                                rs.MoveNext
+                                End If
+                                
+                                'BCLS.Call
+                                'Application.Wait (Now + TimeValue("00:00:01"))
+                                Next V
+                            End If
+                            BCLS.Call
+                        Else 'Can not open BOM#
+                        rs.MoveFirst
+                        Do Until rs.EOF
+                        rs("UPLOAD").Value = "E:1,BOM is using by others:" & Now()
+                        rs.MoveNext
+                        Loop
+                        End If
+                 End If
+              Next I
+            rs.Filter = ""
+            L = rs.RecordCount + 1
+            If Sheet3.AutoFilterMode Then Sheet3.AutoFilter.ShowAllData
+            Sheet3.Range("A2").CopyFromRecordset rs
+            Sheet3.Columns("P:P").ClearContents
+            Sheet3.Columns.AutoFit
+            Sheet3.Range("P1") = "Double Check"
+            Sheet3.Range("P2:P" & L).Formula2 = "=IF(SUM(IF(TRIM(A2:L2)=TRIM(fromSAP!A2:L2),0,1))=0,""成功"",""失败"")"
+            Sheet3.Range("Q1").Formula2 = "=COUNTIFS(P:P,""成功"")/(COUNTA(P:P)-1)"
+            Sheet3.Activate
+            MsgBox "请重新下载核对,用时：" & Round(Timer - Stime, 0) & "秒", vbInformation, "BOM上传完成"
+            SAPOn = False
+            End If
+    Else
+    I = 0
+    MsgBox "SAP没有连接成功", vbCritical, "SAP连接问题"
+End If
+Else
+Sheet1.Activate
+MsgBox "请填先下载成品、半成品BOM信息", vbCritical, "BOM数据缺失"
+End If
+Application.ScreenUpdating = True
+End Function
