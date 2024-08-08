@@ -1,0 +1,47 @@
+//*read PDF BOM into rows*//
+var a=bomitem.getString();
+var bomid;
+var bomitm;
+var bomdat;
+var rtxt;
+var ntxt;
+var ctxt;
+var skipr=-1;
+var bom;
+var bno=replace(bomno.getString(),".pdf","");
+if (a!=""){
+var tokens = a.split("\n");
+var i;
+//check for bom item split with two line
+for (i =0; i<tokens.length; i++)
+	{
+		rtxt=(tokens[i]);	
+		var psku=str2RegExp(rtxt,"(\\d{7,8}\/{0,1}).*$");//first row start with 7number#
+		var nsku=str2RegExp(rtxt,"(\/{0,1}\\d{7,8}).*$");//second row start with \+7number#		
+     if (rtxt!=""&&i>skipr) {//
+         	ntxt=(tokens[i+1]);
+			skipr=i+1;
+		if (ntxt==null||ntxt==""){ //check if first next row is empty
+			ntxt=(tokens[i+2]);
+			skipr=i+2;
+			}
+		    var csku=str2RegExp(ntxt,"(\/{0,1}\\d{7,8}).*$");
+		if (csku!=null&&psku!=null) {		
+			//Alert(ntxt+"@"+skipr)
+			rtxt=rtxt+ntxt+' '+tokens[skipr+1];
+			skipr=skipr+1;
+						 }
+			else{skipr=-1;}			
+			//if (i>skipr) {
+				var usage=upper(rtxt);
+				//usage=replace(usage,"[A-Z]{1,}","");
+				var newrow = new Array(_step_.getOutputRowMeta().size());
+				newrow[_step_.getOutputRowMeta().indexOfValue("bomdate")] =bomdate.getString();
+				newrow[_step_.getOutputRowMeta().indexOfValue("bomno")] =bno;
+				newrow[_step_.getOutputRowMeta().indexOfValue("bomitem")] =usage;
+				_step_.putRow(_step_.getOutputRowMeta(), newrow);
+				//}
+		}
+}
+trans_Status = SKIP_TRANSFORMATION;
+}
