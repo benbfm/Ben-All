@@ -1,7 +1,4 @@
-/*
-*check if html file existing in source then open with chrome in full screen mode
-*auto-play music in html
-*/
+rem /*check if html file existing in source then open with chrome in full screen mode*auto-play music in html*/
 Dim wshShell,sapi ,fso, sourceFolder, destinationFolder, sourceFile,message
 set wshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
